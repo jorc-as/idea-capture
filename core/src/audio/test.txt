@@ -1,0 +1,20 @@
+
+running 2 tests
+Starting recording test...
+test audio::tests::test_noise_reduction ... ok
+Recording at sample rate: 44100
+Expected samples: 441000 ± 44100
+Actual samples recorded: 440338
+Samples recorded: 440338, Contains sound: true
+Starting playback...
+Playing at sample rate: 44100
+Playback completed
+test audio::tests::test_record_and_play_audio ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 20.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+

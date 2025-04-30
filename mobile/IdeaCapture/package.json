@@ -1,0 +1,29 @@
+{
+  "name": "IdeaCapture",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "build": "rspeedy build",
+    "check": "biome check --write",
+    "dev": "rspeedy dev",
+    "format": "prettier --write .",
+    "preview": "rspeedy preview"
+  },
+  "dependencies": {
+    "@lynx-js/react": "^0.106.4"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^1.9.4",
+    "@lynx-js/qrcode-rsbuild-plugin": "^0.3.5",
+    "@lynx-js/react-rsbuild-plugin": "^0.9.6",
+    "@lynx-js/rspeedy": "^0.9.1",
+    "@lynx-js/types": "^3.2.1",
+    "@types/react": "^18.3.20",
+    "prettier": "^3.5.3",
+    "typescript": "~5.8.3"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "private": true
+}
