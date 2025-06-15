@@ -4,7 +4,6 @@
 use crate::AppError;
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use hound;
-use std::path::Path;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
@@ -14,15 +13,21 @@ pub struct AudioProcessor {
     sample_rate: u32,
     channels: u16,
     is_recording: Arc<AtomicBool>,
+    whisper_context: Option<Arc<WhisperContext>>,
 }
 
 impl AudioProcessor {
-    pub fn new(sample_rate: u32, channels: u16) -> Self {
-        Self {
+    pub fn new(sample_rate: u32, channels: u16) -> Result<Self, AppError> {
+        static MODEL_PATH: &str = "/home/javi/idea-capture/ml_models/whisper-base.bin";
+        let ctx = WhisperContext::new(MODEL_PATH)
+            .map_err(|e| AppError::TranscriptionError(e.to_string()))?;
+
+        Ok(Self {
             sample_rate,
             channels,
             is_recording: Arc::new(AtomicBool::new(false)),
-        }
+            whisper_context: Some(Arc::new(ctx)),
+        })
     }
 
     /// Record audio from microphone for specified duration
@@ -81,17 +86,10 @@ impl AudioProcessor {
     }
 
     pub fn transcribe(&self, audio_data: &[f32]) -> Result<String, AppError> {
-        let model_path = "/home/javi/idea-capture/ml_models/whisper-base.bin";
-        if !Path::new(model_path).exists() {
-            return Err(AppError::TranscriptionError(format!(
-                "Whisper model file not found at: {}",
-                model_path
-            )));
-        }
-
-        let ctx = WhisperContext::new(model_path)
-            .map_err(|e| AppError::TranscriptionError(e.to_string()))?;
-        let mut state = ctx
+        let mut state = self
+            .whisper_context
+            .as_ref()
+            .unwrap()
             .create_state()
             .map_err(|e| AppError::TranscriptionError(e.to_string()))?;
 
@@ -103,17 +101,11 @@ impl AudioProcessor {
             .full(params, &audio_data)
             .map_err(|e| AppError::TranscriptionError(e.to_string()))?;
 
-        let num_segments = state
-            .full_n_segments()
+        let transcript = (0..state.full_n_segments()
+            .map_err(|e| AppError::TranscriptionError(e.to_string()))?)
+            .map(|i| state.full_get_segment_text(i))
+            .collect::<Result<String, _>>()
             .map_err(|e| AppError::TranscriptionError(e.to_string()))?;
-        let mut transcript = String::new();
-        for i in 0..num_segments {
-            let segment_text = state
-                .full_get_segment_text(i)
-                .map_err(|e| AppError::TranscriptionError(e.to_string()))?;
-            transcript.push_str(&segment_text);
-        }
-
         Ok(transcript)
     }
 
@@ -156,7 +148,7 @@ impl AudioProcessor {
                     input.drain(..len); // Remove played samples
                 },
                 |err| eprintln!("Audio playback error: {}", err),
-                None,
+                Some(Duration::from_secs(5)),
             )
             .map_err(|e| AppError::AudioProcessingError(e.to_string()))?;
 
@@ -164,9 +156,12 @@ impl AudioProcessor {
             .play()
             .map_err(|e| AppError::AudioProcessingError(e.to_string()))?;
 
-        let playback_duration =
-            Duration::from_secs_f32(samples.lock().unwrap().len() as f32 / self.sample_rate as f32);
-        std::thread::sleep(playback_duration);
+        std::thread::spawn(move ||{
+            let duration = Duration::from_secs_f32(samples.lock().unwrap().len() as f32 / self.sample_rate as f32);
+        s;
+            std::thread::sleep(duration);
+            drop(stream);
+        })
 
         Ok(())
     }
@@ -224,14 +219,14 @@ mod tests {
 
     #[test]
     fn test_noise_reduction() {
-        let processor = AudioProcessor::new(44100, 1);
+        let processor = AudioProcessor::new(44100, 1).unwrap();
         let samples = vec![0.01, 0.03, -0.01, 0.5, -0.6, 0.015];
         let processed = processor.reduce_noise(&samples);
         assert_eq!(processed, vec![0.0, 0.03, 0.0, 0.5, -0.6, 0.0]);
     }
     #[test]
     fn test_record_and_transcribe() {
-        let processor = AudioProcessor::new(16000, 1);
+        let processor = AudioProcessor::new(16000, 1).unwrap();
 
         println!("Please say 'hello world' in the next 5 seconds...");
 
