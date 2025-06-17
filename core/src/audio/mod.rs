@@ -101,7 +101,8 @@ impl AudioProcessor {
             .full(params, &audio_data)
             .map_err(|e| AppError::TranscriptionError(e.to_string()))?;
 
-        let transcript = (0..state.full_n_segments()
+        let transcript = (0..state
+            .full_n_segments()
             .map_err(|e| AppError::TranscriptionError(e.to_string()))?)
             .map(|i| state.full_get_segment_text(i))
             .collect::<Result<String, _>>()
@@ -156,13 +157,10 @@ impl AudioProcessor {
             .play()
             .map_err(|e| AppError::AudioProcessingError(e.to_string()))?;
 
-        std::thread::spawn(move ||{
-            let duration = Duration::from_secs_f32(samples.lock().unwrap().len() as f32 / self.sample_rate as f32);
-        s;
-            std::thread::sleep(duration);
-            drop(stream);
-        })
-
+        let duration =
+            Duration::from_secs_f32(samples.lock().unwrap().len() as f32 / self.sample_rate as f32);
+        std::thread::sleep(duration);
+        drop(stream);
         Ok(())
     }
 

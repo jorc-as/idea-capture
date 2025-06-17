@@ -6,6 +6,8 @@ fn test() {
 
     // Start recording
     let recording_handle = processor
+        .as_ref()
+        .unwrap()
         .start_recording()
         .expect("Failed to start recording");
 
@@ -20,8 +22,9 @@ fn test() {
         .expect("Failed to stop recording");
 
     // Process, transcribe and play back
-    let cleaned_samples = processor.reduce_noise(&samples);
+    let cleaned_samples = processor.as_ref().unwrap().reduce_noise(&samples);
     let transcription = processor
+        .unwrap()
         .transcribe(&cleaned_samples)
         .expect("Transcription failed");
     println!("Transcription: '{}'", transcription);
