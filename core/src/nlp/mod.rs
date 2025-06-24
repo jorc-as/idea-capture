@@ -1,3 +1,5 @@
+use std::path::PathBuf;
+
 use chrono::{DateTime, Utc};
 use rust_bert::pegasus::{
     PegasusConditionalGenerator, PegasusConfigResources, PegasusModelResources,
@@ -7,7 +9,7 @@ use rust_bert::pipelines::generation_utils::{GenerateConfig, GenerateOptions, La
 use rust_bert::pipelines::sentence_embeddings::{
     SentenceEmbeddingsBuilder, SentenceEmbeddingsConfig, SentenceEmbeddingsModelType,
 };
-use rust_bert::resources::RemoteResource;
+use rust_bert::resources::{LocalResource, RemoteResource};
 use tch::Device;
 // Enhanced Note structure with more metadata
 #[derive(Debug, Clone)]
@@ -71,15 +73,15 @@ pub struct NoteTaker {
 impl NoteTaker {
     pub fn new(user_prefs: UserPreferences) -> Result<Self, Box<dyn std::error::Error>> {
         // Initialize model
-        let model_rsrc = Box::new(RemoteResource::from_pretrained(
-            PegasusModelResources::CNN_DAILYMAIL,
-        ));
-        let config_rsrc = Box::new(RemoteResource::from_pretrained(
-            PegasusConfigResources::CNN_DAILYMAIL,
-        ));
-        let vocab_rsrc = Box::new(RemoteResource::from_pretrained(
-            PegasusVocabResources::CNN_DAILYMAIL,
-        ));
+        let model_rsrc = Box::new(LocalResource {
+            local_path: PathBuf::from("../../../ml_models/rust_model.ot"),
+        });
+        let config_rsrc = Box::new(LocalResource {
+            local_path: PathBuf::from("../../../ml_models/config.json"),
+        });
+        let vocab_rsrc = Box::new(LocalResource {
+            local_path: PathBuf::from("../../../ml_models/spiece.model"),
+        });
 
         let device = Device::cuda_if_available();
 
@@ -97,7 +99,7 @@ impl NoteTaker {
         let model = PegasusConditionalGenerator::new(generate_config)?;
         // Initialize sentence embeddings model
         let sentence_embedder =
-            SentenceEmbeddingsBuilder::remote(SentenceEmbeddingsModelType::AllMiniLmL12V2)
+            SentenceEmbeddingsBuilder::local("../../../ml_models/sentenceMini.ot")
                 .with_device(Device::cuda_if_available())
                 .create_model()
                 .ok()
