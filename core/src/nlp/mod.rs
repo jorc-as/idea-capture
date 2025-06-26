@@ -95,8 +95,9 @@ impl NoteTaker {
             device,
             ..Default::default()
         };
-
+        println!("1");
         let model = PegasusConditionalGenerator::new(generate_config)?;
+        println!("2");
         // Initialize sentence embeddings model
         let sentence_embedder =
             SentenceEmbeddingsBuilder::local("../../../ml_models/sentenceMini.ot")
