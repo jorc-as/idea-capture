@@ -1,5 +1,3 @@
-use std::path::PathBuf;
-
 use chrono::{DateTime, Utc};
 use rust_bert::pegasus::{
     PegasusConditionalGenerator, PegasusConfigResources, PegasusModelResources,
@@ -9,7 +7,9 @@ use rust_bert::pipelines::generation_utils::{GenerateConfig, GenerateOptions, La
 use rust_bert::pipelines::sentence_embeddings::{
     SentenceEmbeddingsBuilder, SentenceEmbeddingsConfig, SentenceEmbeddingsModelType,
 };
-use rust_bert::resources::{LocalResource, RemoteResource};
+use rust_bert::resources::{LocalResource, RemoteResource, ResourceProvider};
+use std::io::{stdin, stdout, Read, Write};
+use std::path::PathBuf;
 use tch::Device;
 // Enhanced Note structure with more metadata
 #[derive(Debug, Clone)]
@@ -46,6 +46,7 @@ pub struct UserPreferences {
     summarization_length: SummarizationLength,
     highlight_action_items: bool,
     organize_by_topic: bool,
+    remote_model: bool,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -72,17 +73,33 @@ pub struct NoteTaker {
 
 impl NoteTaker {
     pub fn new(user_prefs: UserPreferences) -> Result<Self, Box<dyn std::error::Error>> {
+        let model_rsrc: Box<dyn ResourceProvider + Send>;
+        let config_rsrc: Box<dyn ResourceProvider + Send>;
+        let vocab_rsrc: Box<dyn ResourceProvider + Send>;
+        if user_prefs.remote_model {
+            println!("remote models");
+            model_rsrc = Box::new(RemoteResource::from_pretrained(
+                PegasusModelResources::CNN_DAILYMAIL,
+            ));
+            config_rsrc = Box::new(RemoteResource::from_pretrained(
+                PegasusConfigResources::CNN_DAILYMAIL,
+            ));
+            vocab_rsrc = Box::new(RemoteResource::from_pretrained(
+                PegasusVocabResources::CNN_DAILYMAIL,
+            ));
+        } else {
+            println!("local models");
+            model_rsrc = Box::new(LocalResource {
+                local_path: PathBuf::from("../../../ml_models/rust_model.ot"),
+            });
+            config_rsrc = Box::new(LocalResource {
+                local_path: PathBuf::from("../../../ml_models/config.json"),
+            });
+            vocab_rsrc = Box::new(LocalResource {
+                local_path: PathBuf::from("../../../ml_models/spiece.model"),
+            });
+        }
         // Initialize model
-        let model_rsrc = Box::new(LocalResource {
-            local_path: PathBuf::from("../../../ml_models/rust_model.ot"),
-        });
-        let config_rsrc = Box::new(LocalResource {
-            local_path: PathBuf::from("../../../ml_models/config.json"),
-        });
-        let vocab_rsrc = Box::new(LocalResource {
-            local_path: PathBuf::from("../../../ml_models/spiece.model"),
-        });
-
         let device = Device::cuda_if_available();
 
         let generate_config = GenerateConfig {
@@ -519,11 +536,42 @@ fn average_embeddings(embeddings: &[Vec<f64>]) -> Vec<f64> {
 // Main function to process audio transcripts
 pub fn process_audio_transcript(transcript: &str) -> Result<Vec<Note>, Box<dyn std::error::Error>> {
     // Create default user preferences
+    println!("Do you want to use remote models? [y/n]");
+    let remote_model;
+    let stdin = stdin();
+    let mut input = String::new();
+
+    loop {
+        input.clear(); // Clear previous input
+        print!("> ");
+        stdout().flush().unwrap(); // Flush to ensure the prompt shows
+
+        stdin
+            .read_line(&mut input)
+            .expect("Failed to read from stdin");
+
+        let input_trimmed = input.trim(); // Remove whitespace including newline
+
+        match input_trimmed {
+            "y" => {
+                remote_model = true;
+                break;
+            }
+            "n" => {
+                remote_model = false;
+                break;
+            }
+            _ => {
+                println!("Please try again [y/n]");
+            }
+        }
+    }
     let user_prefs = UserPreferences {
         voice_style: VoiceStyle::FirstPerson,
         summarization_length: SummarizationLength::Moderate,
         highlight_action_items: true,
         organize_by_topic: true,
+        remote_model,
     };
 
     // Initialize note taker

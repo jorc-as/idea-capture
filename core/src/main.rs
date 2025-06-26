@@ -20,6 +20,10 @@ fn os_specific_function() {
 fn main() {
     let processor = audio::AudioProcessor::new(16000, 1);
 
+    println!("Please press a key to start recording...");
+    use std::io::{stdin, Read};
+    let mut stdin = stdin();
+    let _ = stdin.read(&mut [0u8]).expect("Failed to read from stdin");
     // Start recording
     let recording_handle = processor
         .as_ref()
@@ -28,8 +32,6 @@ fn main() {
         .expect("Failed to start recording");
 
     println!("Please press a key to stop recording...");
-    use std::io::{stdin, Read};
-    let mut stdin = stdin();
     let _ = stdin.read(&mut [0u8]).expect("Failed to read from stdin");
 
     // Stop recording and get samples
