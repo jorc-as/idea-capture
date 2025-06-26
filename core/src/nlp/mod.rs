@@ -100,7 +100,7 @@ impl NoteTaker {
         println!("2");
         // Initialize sentence embeddings model
         let sentence_embedder =
-            SentenceEmbeddingsBuilder::local("../../../ml_models/sentenceMini.ot")
+            SentenceEmbeddingsBuilder::remote(SentenceEmbeddingsModelType::AllMiniLmL12V2)
                 .with_device(Device::cuda_if_available())
                 .create_model()
                 .ok()
