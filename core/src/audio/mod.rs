@@ -1,9 +1,10 @@
 //! Audio processing module for Idea Capture
 //! Handles recording, preprocessing, preparing audio for transcription, and playback
-
 use crate::AppError;
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use hound;
+use std::env;
+use std::path::Path;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
@@ -18,8 +19,9 @@ pub struct AudioProcessor {
 
 impl AudioProcessor {
     pub fn new(sample_rate: u32, channels: u16) -> Result<Self, AppError> {
-        static MODEL_PATH: &str = "/home/javi/idea-capture/ml_models/whisper-base.bin";
-        let ctx = WhisperContext::new(MODEL_PATH)
+        let model_path = env::var("MODEL_PATH");
+        let whisper_path = model_path.unwrap() + "whisper/whisper-medium.bin";
+        let ctx = WhisperContext::new(&whisper_path)
             .map_err(|e| AppError::TranscriptionError(e.to_string()))?;
 
         Ok(Self {

@@ -19,6 +19,7 @@ fn os_specific_function() {
 }
 fn main() {
     let processor = audio::AudioProcessor::new(16000, 1);
+    let note_taker = nlp::init_note_taker().unwrap();
 
     println!("Please press a key to start recording...");
     use std::io::{stdin, Read};
@@ -47,7 +48,7 @@ fn main() {
         .expect("Transcription failed");
     println!("Transcription: '{}'", transcription);
 
-    let notes = nlp::process_audio_transcript(&transcription);
+    let notes = note_taker.process_transcript(&transcription);
     if let Ok(notes) = notes {
         for note in notes {
             println!("{:?}", note);

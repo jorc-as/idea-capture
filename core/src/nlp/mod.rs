@@ -5,11 +5,15 @@ use rust_bert::pegasus::{
 };
 use rust_bert::pipelines::generation_utils::{GenerateConfig, GenerateOptions, LanguageGenerator};
 use rust_bert::pipelines::sentence_embeddings::{
-    SentenceEmbeddingsBuilder, SentenceEmbeddingsConfig, SentenceEmbeddingsModelType,
+    SentenceEmbeddingsBuilder, SentenceEmbeddingsModelType,
 };
 use rust_bert::resources::{LocalResource, RemoteResource, ResourceProvider};
-use std::io::{stdin, stdout, Read, Write};
-use std::path::PathBuf;
+use std::env;
+use std::path::Path;
+use std::{
+    io::{stdin, stdout, Write},
+    path::PathBuf,
+};
 use tch::Device;
 // Enhanced Note structure with more metadata
 #[derive(Debug, Clone)]
@@ -76,6 +80,8 @@ impl NoteTaker {
         let model_rsrc: Box<dyn ResourceProvider + Send>;
         let config_rsrc: Box<dyn ResourceProvider + Send>;
         let vocab_rsrc: Box<dyn ResourceProvider + Send>;
+        let model_path = env::var("MODEL_PATH")?;
+        println!("{}", model_path);
         if user_prefs.remote_model {
             println!("remote models");
             model_rsrc = Box::new(RemoteResource::from_pretrained(
@@ -90,13 +96,14 @@ impl NoteTaker {
         } else {
             println!("local models");
             model_rsrc = Box::new(LocalResource {
-                local_path: PathBuf::from("../../../ml_models/rust_model.ot"),
+                local_path: Path::new(&model_path).join("pegasus/rust_model.ot"),
             });
+            println!("{:?}", model_rsrc);
             config_rsrc = Box::new(LocalResource {
-                local_path: PathBuf::from("../../../ml_models/config.json"),
+                local_path: Path::new(&model_path).join("pegasus/config.json"),
             });
             vocab_rsrc = Box::new(LocalResource {
-                local_path: PathBuf::from("../../../ml_models/spiece.model"),
+                local_path: Path::new(&model_path).join("pegasus/spiece.model"),
             });
         }
         // Initialize model
@@ -116,12 +123,20 @@ impl NoteTaker {
         let model = PegasusConditionalGenerator::new(generate_config)?;
         println!("2");
         // Initialize sentence embeddings model
-        let sentence_embedder =
+        let sentence_embedder = if user_prefs.remote_model {
             SentenceEmbeddingsBuilder::remote(SentenceEmbeddingsModelType::AllMiniLmL12V2)
                 .with_device(Device::cuda_if_available())
                 .create_model()
                 .ok()
-                .map(Box::new);
+                .map(Box::new)
+        } else {
+            SentenceEmbeddingsBuilder::local("../../../ml_models/sentence")
+                .with_device(Device::cuda_if_available())
+                .create_model()
+                .ok()
+                .map(Box::new)
+        };
+        println!("3");
         Ok(NoteTaker {
             model,
             user_prefs,
@@ -533,8 +548,8 @@ fn average_embeddings(embeddings: &[Vec<f64>]) -> Vec<f64> {
     avg
 }
 
-// Main function to process audio transcripts
-pub fn process_audio_transcript(transcript: &str) -> Result<Vec<Note>, Box<dyn std::error::Error>> {
+// Initialize note_taker with user preferences
+pub fn init_note_taker() -> Result<NoteTaker, Box<dyn std::error::Error>> {
     // Create default user preferences
     println!("Do you want to use remote models? [y/n]");
     let remote_model;
@@ -575,10 +590,7 @@ pub fn process_audio_transcript(transcript: &str) -> Result<Vec<Note>, Box<dyn s
     };
 
     // Initialize note taker
-    let note_taker = NoteTaker::new(user_prefs)?;
-
-    // Process transcript
-    note_taker.process_transcript(transcript)
+    NoteTaker::new(user_prefs)
 }
 
 // Function to format notes for display or export
@@ -722,7 +734,8 @@ Oh! Call Mom. Just to check in. Don’t let it go another few days, she’ll gui
 
 Alright, I think that’s it. Probably missing something, but I’ll add more if it comes to me. Don’t ignore this. Seriously. Do the things.";
 
-    let notes = process_audio_transcript(transcript)?;
+    let note_taker = init_note_taker();
+    let notes = note_taker.unwrap().process_transcript(transcript)?;
 
     println!("Generated {} notes", notes.len());
 
