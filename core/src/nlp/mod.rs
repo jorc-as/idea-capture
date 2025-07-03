@@ -9,11 +9,8 @@ use rust_bert::pipelines::sentence_embeddings::{
 };
 use rust_bert::resources::{LocalResource, RemoteResource, ResourceProvider};
 use std::env;
+use std::io::{stdin, stdout, Write};
 use std::path::Path;
-use std::{
-    io::{stdin, stdout, Write},
-    path::PathBuf,
-};
 use tch::Device;
 // Enhanced Note structure with more metadata
 #[derive(Debug, Clone)]
@@ -130,7 +127,7 @@ impl NoteTaker {
                 .ok()
                 .map(Box::new)
         } else {
-            SentenceEmbeddingsBuilder::local("../../../ml_models/sentence")
+            SentenceEmbeddingsBuilder::local(model_path + "sentence/")
                 .with_device(Device::cuda_if_available())
                 .create_model()
                 .ok()
