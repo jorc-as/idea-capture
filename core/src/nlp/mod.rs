@@ -105,6 +105,7 @@ impl NoteTaker {
         }
         // Initialize model
         let device = Device::cuda_if_available();
+        println!("{:?}", device);
 
         let generate_config = GenerateConfig {
             model_resource: rust_bert::pipelines::common::ModelResource::Torch(model_rsrc),
@@ -218,68 +219,47 @@ impl NoteTaker {
         embedder: &Box<rust_bert::pipelines::sentence_embeddings::SentenceEmbeddingsModel>,
         sentences: &[String],
     ) -> Result<Vec<String>, Box<dyn std::error::Error>> {
+        if sentences.is_empty() {
+            return Ok(vec![]);
+        }
         println!("semantic");
         // Generate embeddings for all sentences
         let embeddings = embedder.encode(sentences)?;
 
         // Convert to Vec<Vec<f64>> for easier handling
-        let embeddings: Vec<Vec<f64>> = embeddings
-            .iter()
-            .map(|v| v.iter().map(|&f| f as f64).collect())
-            .collect();
+        //        let embeddings: Vec<Vec<f64>> = embeddings
+        //            .iter()
+        //            .map(|v| v.iter().map(|&f| f as f64).collect())
+        //            .collect();
 
-        const SIMILARITY_THRESHOLD: f64 = 0.5;
+        const SIMILARITY_THRESHOLD: f32 = 0.75;
         const MAX_SEGMENT_SIZE: usize = 5; // Maximum number of sentences per segment
 
         let mut segments = Vec::new();
         let mut current_segment = Vec::new();
-        let mut segment_embedding = Vec::new();
+        let mut current_embeddings = Vec::new();
 
         // Initialize with first sentence
-        if !sentences.is_empty() {
-            current_segment.push(sentences[0].clone());
-            segment_embedding = embeddings[0].clone();
-        }
+        current_segment.push(sentences[0].clone());
+        current_embeddings.push(embeddings[0].clone());
 
         // Process remaining sentences
         for i in 1..sentences.len() {
             // Calculate similarity with current segment
+
+            let segment_embedding = average_embeddings(&current_embeddings);
+
             let similarity = cosine_similarity(&segment_embedding, &embeddings[i]);
 
             if similarity >= SIMILARITY_THRESHOLD && current_segment.len() < MAX_SEGMENT_SIZE {
                 // Add to current segment if similar enough
                 current_segment.push(sentences[i].clone());
-
-                // Update segment embedding (average of all sentences in segment)
-                segment_embedding = average_embeddings(
-                    &current_segment
-                        .iter()
-                        .enumerate()
-                        .filter_map(|(idx, _)| {
-                            // Map back to original position in sentences
-                            let orig_idx = if idx == current_segment.len() - 1 {
-                                i // Just added sentence
-                            } else {
-                                idx + i - current_segment.len() + 1 // Previously added sentences
-                            };
-
-                            if orig_idx < embeddings.len() {
-                                Some(embeddings[orig_idx].clone())
-                            } else {
-                                None
-                            }
-                        })
-                        .collect::<Vec<Vec<f64>>>(),
-                );
+                current_embeddings.push(embeddings[i].clone());
             } else {
-                // Start a new segment
-                if !current_segment.is_empty() {
-                    segments.push(current_segment.join(" "));
-                    current_segment = Vec::new();
-                }
-
-                current_segment.push(sentences[i].clone());
-                segment_embedding = embeddings[i].clone();
+                // Start new segment
+                segments.push(current_segment.join(". ")); // Restore punctuation
+                current_segment = vec![sentences[i].clone()];
+                current_embeddings = vec![embeddings[i].clone()];
             }
         }
 
@@ -495,7 +475,7 @@ impl NoteTaker {
         });
     }
 }
-fn cosine_similarity(v1: &[f64], v2: &[f64]) -> f64 {
+fn cosine_similarity(v1: &[f32], v2: &[f32]) -> f32 {
     if v1.is_empty() || v2.is_empty() {
         return 0.0;
     }
@@ -522,24 +502,24 @@ fn cosine_similarity(v1: &[f64], v2: &[f64]) -> f64 {
     }
 }
 
-fn average_embeddings(embeddings: &[Vec<f64>]) -> Vec<f64> {
+fn average_embeddings(embeddings: &[Vec<f32>]) -> Vec<f32> {
     if embeddings.is_empty() {
         return Vec::new();
     }
 
     let dim = embeddings[0].len();
+    if !embeddings.iter().all(|e| e.len() == dim) {
+        print!("All embeddings must have the same length");
+        return Vec::new();
+    }
     let mut avg = vec![0.0; dim];
 
     for embedding in embeddings {
         for i in 0..dim {
             if i < embedding.len() {
-                avg[i] += embedding[i];
+                avg[i] += embedding[i] / embeddings.len() as f32;
             }
         }
-    }
-
-    for i in 0..dim {
-        avg[i] /= embeddings.len() as f64;
     }
 
     avg
